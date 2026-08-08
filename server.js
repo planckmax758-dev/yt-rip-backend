@@ -13,9 +13,18 @@ const TTL_MS = 30 * 60 * 1000;
 
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 
-app.use(cors());
+// ── Explicit CORS (required for browser clients on other domains) ─────────────
+const corsOptions = {
+  origin: "*",
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  optionsSuccessStatus: 204,
+};
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions)); // handle preflight for ALL routes
 app.use(express.json());
 
+// ── Job store ─────────────────────────────────────────────────────────────────
 const jobs = new Map();
 
 function scheduleCleanup(jobId) {
@@ -71,6 +80,9 @@ function convertAudio(jobId, url, bitrate) {
   });
 }
 
+// ── Routes ────────────────────────────────────────────────────────────────────
+app.get("/api/health", (_, res) => res.json({ ok: true, jobs: jobs.size }));
+
 app.post("/api/convert", (req, res) => {
   const { url, bitrate = "320", jobId } = req.body;
   if (!url) return res.status(400).json({ error: "url required" });
@@ -112,8 +124,6 @@ app.post("/api/download-zip", (req, res) => {
   for (const { id, job } of available) archive.file(job.filePath, { name: `${id}.${job.ext || "mp3"}` });
   archive.finalize();
 });
-
-app.get("/api/health", (_, res) => res.json({ ok: true, jobs: jobs.size }));
 
 app.listen(PORT, () => {
   console.log(`\n🎵 YT Rip → http://localhost:${PORT}`);
